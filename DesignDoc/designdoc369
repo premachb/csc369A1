@@ -1,0 +1,266 @@
+DESIGN PART TWO-A2
+------------------
+
+------------------
+FUNCTIONS
+------------------
+
+PID_JOIN(pid_t targetpid, int *status, int flags)
+
+	#Calling thread WAITS till "targetpid" calls THREAD_EXIT. 
+
+	#PID_JOIN can be called by any thread onto any other thread
+
+	#If multiple threads call PID_JOIN on the same "targetpid", after that "targetpid" exists it gives its pidinfo
+	#to all of the threads then destroys its pidinfo.
+
+	#If a thread exists before any thread calls PID_JOIN on it, its pidinfo is held till someone calls
+	#PID_JOIN or PID_DETACH on it. After running PID_JOIN/PID_DETACH its pidinfo is immeditally destroyed
+
+
+	PREREQ: "targetpid" MUST be joinable, THREAD_DETACH could not have been called on it before
+			calling PID_JOIN on it
+
+	RETURNS: pid of joined thread is returned (pid of "targetpid")
+			-> exit status of targetpid is saved in "int *status"
+
+	ERROR: negative number
+			->
+			ESRCH: No thread could be found corresponding to that specified by "targetpid". This is the expected behavior when "targetpid" has exited and has already been joined by one or more other threads.
+
+			EINVAL: The thread corresponding to "targetpid" has been detached.
+			
+			EINVAL: "targetpid" is INVALID_PID or BOOTUP_PID.
+
+			EDEADLK: The "targetpid" argument refers to the calling thread. (You will need to add this error to errno.h, and a corresponding message to errmsg.h)
+
+
+
+
+PID_DETACH(pidt childpid)
+
+	#puts "childpid" into the detached state
+
+	#any thread in the detached state can not have PID_JOIN called on it
+
+	#the pidinfo of "childpid" can be destroyed immeditally after termination of PID_DETACH
+
+	#if "childpid" has already exited, then it retrieves "childpid"s pid struct
+
+
+	RETURNS: 0 on success
+
+	ERROR: non-zero integer
+			->
+			ESRCH: No thread could be found corresponding to that specified by childpid.
+
+			EINVAL: The thread childpid is already in the detached state.
+
+			EINVAL: The caller is not the parent of childpid.
+
+			EINVAL: childpid is INVALID_PID or BOOTUP_PID.
+
+			EINVAL: childpid has already been joined at at least one other thread, and therefore cannot be detached.
+
+
+THREAD_EXIT(int exitcode)
+
+	#have call pid_exit
+
+	#store exit status arg in its pid struct 
+
+	#dodetach in pid_exit returns true if exiting thread was running user level proccess
+
+
+THREAD_FORK(~~~~~~~~~~~)
+
+
+
+----------------------
+SITUATIONS TO CONSIDER
+----------------------
+
+1) Call pid_join before exit
+	
+	Then the thread that called pid_join waits till "targetpid" calls thread_exit, after which the calling thread wakes up and pid_join continues
+
+
+2)Call pid_detach before exit
+
+	Then the "childpid" is put in the detached state in which its pidinfo is decarded immeditally and no thread can call PID_JOIN onto it
+
+3)exit before Calling pid_join
+
+	Then the exited thread holds onto its pidinfo untill a thread calls PID_JOIN onto it, after which it passed its pidinfo along then destroys itself.
+
+4)exit before Calling pid_detch
+
+	Then the "childpid" pid struct is passed over to the thread calling PID_DETACH
+
+
+
+---------
+SOLUTIONS    
+---------
+
+
+
+	##########################################################
+	######## NO SYNCING HERE, MUST FIGURE OUT SYNCING ########
+	######## SUPER ROUGH PSEUDO CODE, WILL EXPAND  	  ########
+	##########################################################
+
+	##########################################################	
+	######## NEXT PART IS ALL DONE IN FILE pid.c      ########
+	##########################################################
+
+
+	==============
+	STRUCT PIDINFO
+	==============
+
+	/*
+	1) we must add a way to see if a struct is detached
+	*/
+
+	bool detached; #TRUE IF DETACHED, FALSE OTHERWISE
+
+
+	/*
+	2) we must have a way of saving the joined threads pidinfo, also quick way of checkinf to see
+		if a thread has joined another thread
+	*/
+	
+	struct **joined_pid; 	//list of pidinfo that have been joined, if empty then never joined, otherwise
+							//holds the pidinfo of joined threads
+	
+
+	========
+	PID_JOIN
+	========
+		
+	PID_JOIN(pid_t targetpid, int *status, int flags)
+
+		struct pidinfo *targetpi;
+
+		//ERROR: if "targetpid" is INVALID_PID or BOOTUP_PID then return "EINVAL"
+		if(targetpid == INVALID_PID || targetpid == BOOTUP_PID){
+			return EINVAL;
+		}
+
+		targetpi = pi_get(targetpid);
+
+
+		/*
+		1) check if "targetpid" has exited           #boolean in pid struct
+			
+		*/
+	
+		//ERROR: if "targetpid" doesnt have a pid struct then return "ESRCH"
+		if(targetpi->pi_exited){
+			return ESRCH;
+		}
+
+		//ERROR: if "targetpid" has been detached then return "EINVAL"
+		else if(targetpi->detached){
+			return EINVAL;
+		}
+
+		//ERROR:if "targetpid" is pid of the thread that called PID_JOIN then return "EDEADLK". 
+		//MUST ADD ERROR
+		else if(targetpi->pi_ppid != curthread->t_pid){
+			return EDEADLK;
+		}
+
+
+		/*
+		2a) IF EXITED THEN
+				-retrieve pidinfo of "targetpid"
+				-set *status to the exitstatus of "targetpid"
+				-destroy pidinfo of "targetpid"
+				-return pid of the retrieved pidinfo
+		*/
+
+		/*
+		2b) OTHERWISE
+			-wait till "targetpid" has exited
+			-retrieve pidinfo of "targetpid"
+			-destroy pidinfo of "targetpid"
+			-return pid of the retrieved pidinfo
+		*/
+
+
+
+	==========
+	PID_DETACH
+	==========
+
+	PID_DETACH(pid_t childpid)
+
+		struct pidinfo *childpi;
+
+		//ERROR: if "childpid" is INVALID_PID or BOOTUP_PID then return "EINVAL"
+		if(childpid == INVALID_PID || childpid == BOOTUP_PID){
+			return EINVAL;
+		}
+
+
+		childpi = pi_get(childpid);
+
+		/*
+		1) check to see "childpid" has exited
+		*/
+
+		//ERROR: if thread "childpid" could not be found return "ESRCH"
+		if (childpi == NULL){
+			return ESRCH;
+
+		}
+
+		//ERROR: if thread "childpid" is already in deteached state then return "EINVAL"
+		
+		if(!childpi->detached){
+			return EINVAL;
+		}
+
+		//ERROR: if the calling thread is not the parent of "childpid" then return "EINVAL"
+		
+		else if(childpi->pi_ppid != curthread->t_pid){
+			return EINVAL;
+		}
+
+		//ERROR: if "childpid" has already been joined by atleast one other thread return "EINVAL"
+		else if(childpi->joined_pid == NULL){
+			return EINVAL;
+		}
+
+
+
+
+		/*
+		2a) IF EXITED THEN
+			-retrieve the pidinfo of "childpid"            #dont understand why
+			-return 0
+		*/
+
+
+		/*	
+		2b) IF NOT EXITED THEN
+			-set "chilpid" to the detached state			#could be done by adding a boolean "detached"
+			-return 0										#in the pidinfo struct
+		*/	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
