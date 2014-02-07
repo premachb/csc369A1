@@ -106,11 +106,7 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 	size_t actual;
 	size_t iterator;
 	int code;
-	vaddr_t *arg_start = kmalloc((nargs + 1)* sizeof(userptr_t));  /* nargs * 4 bytes for each argument */
-
-	/* Create a reversed argv so we can easily loop */
-	int nargs_copy = (int) nargs;
-	kprintf("nargs_copy is %d", nargs_copy);
+	vaddr_t *arg_start = kmalloc((nargs+1) * sizeof(userptr_t));  /* nargs * 4 bytes for each argument */
 
 	/* Copy the strings themselves on to the stack. */
 	for(i = 1; i <= nargs; i++){
@@ -132,23 +128,21 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 	*(arg_start + nargs) = 0;
 
 	/* Copy the array of pointer on to the stack */
-	size_t accumulator = nargs * sizeof(userptr_t);
+	size_t accumulator = 0;
  	padding = (stackptr - current_offset) % 4;
 
- 	/*
+ 	
  	for(i = 0; i <= nargs; i++){
  		iterator = nargs - i;
-		accumulator += sizeof(userptr_t);
+ 		accumulator += sizeof(userptr_t);
+		code = copyout(&arg_start[iterator], (userptr_t)(stackptr - current_offset - padding - accumulator), sizeof(userptr_t)); 
 		kprintf("Codeout is %d\n", code);
 	}
-	*/
-
-	code = copyout(arg_start, (userptr_t)(stackptr - current_offset - padding - accumulator), sizeof(userptr_t) * nargs); 
-
+	
 
 	/* Warp to user mode. */
 	enter_new_process(nargs, (userptr_t)(stackptr - current_offset - padding - accumulator), 
-			  stackptr, entrypoint);
+			  (stackptr - current_offset - padding), entrypoint);
 	
 	/* enter_new_process does not return. */
 	panic("enter_new_process returned\n");
