@@ -13,8 +13,8 @@
 # The things that can be set here are documented in mk/os161.config.mk.
 #
 
-OSTREE=/h/u11/g2/00/g2premac/csc369/root
+OSTREE=$(HOME)/csc369/root
 PLATFORM=sys161
 MACHINE=mips
-COMPAT_CFLAGS= -DNEED_ERR
-COMPAT_TARGETS= install-errh
+COMPAT_CFLAGS=
+COMPAT_TARGETS=
