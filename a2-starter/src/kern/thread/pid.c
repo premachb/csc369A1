@@ -1,3 +1,5 @@
+
+
 /*
  * Copyright (c) 2000, 2001, 2002, 2003, 2004, 2005, 2008, 2009
  *	The President and Fellows of Harvard College.
@@ -56,6 +58,8 @@ struct pidinfo {
 	volatile bool pi_exited;	// true if thread has exited
 	int pi_exitstatus;		// status (only valid if exited)
 	struct cv *pi_cv;		// use to wait for thread exit
+	bool detached;
+	struct pid_t **joined_pid;
 };
 
 
@@ -314,11 +318,58 @@ pid_unalloc(pid_t theirpid)
 int
 pid_detach(pid_t childpid)
 {
-	(void)childpid;
+
+	struct pidinfo *childpi;
+
+	//ERROR: if "childpid" is INVALID_PID or BOOTUP_PID then return "EINVAL"
+	if(childpid == INVALID_PID || childpid == BOOTUP_PID){
+		return EINVAL;
+	}
+
+	childpi = pi_get(childpid);
+
+	/*
+	1) check to see "childpid" has exited
+	*/
+
+	//ERROR: if thread "childpid" could not be found return "ESRCH"
+	if (childpi == NULL){
+		return ESRCH;
+	}
+
+	//ERROR: if thread "childpid" is already in deteached state then return "EINVAL"
+		
+	if(!childpi->detached){
+		return EINVAL;
+	}
+
+	//ERROR: if the calling thread is not the parent of "childpid" then return "EINVAL"
+		
+	else if(childpi->pi_ppid != curthread->t_pid){
+		return EINVAL;
+	}
+
+	//ERROR: if "childpid" has already been joined by atleast one other thread return "EINVAL"
+	else if(childpi->joined_pid == NULL){
+		return EINVAL;
+	}
+
+	lock_acquire(pidlock);
+
+	//check if pid has already exited, if so then frees it.
+	if(childpi->pi_exited){
+		pi_drop(childpi->pi_pid);
+	}
+
+	//Put the childpid into the detached state
+	else{
+		childpi->detached = true;
+	}
 	
-	// Implement me
-	KASSERT(false);
-	return EUNIMP;
+
+	lock_release(pidlock);
+
+	return 0;
 }
 
 /*
@@ -357,10 +408,42 @@ pid_exit(int status, bool dodetach)
 int
 pid_join(pid_t targetpid, int *status, int flags)
 {
-	(void)targetpid;
-	(void)status;
-	(void)flags;
+
+	(void) flags;
+	(void) status;
+
+	struct pidinfo *targetpi;
+
+	//ERROR: if "targetpid" is INVALID_PID or BOOTUP_PID then return "EINVAL"
+	if(targetpid == INVALID_PID || targetpid == BOOTUP_PID){
+		return EINVAL;
+	}
+
+	targetpi = pi_get(targetpid);
+
+	/*
+	1) check if "targetpid" has exited           #boolean in pid struct
+	*/
 	
+	//ERROR: if "targetpid" doesnt have a pid struct then return "ESRCH"
+	if(targetpi->pi_exited){
+		return ESRCH;
+	}
+
+	//ERROR: if "targetpid" has been detached then return "EINVAL"
+	else if(targetpi->detached){
+		return EINVAL;
+	}
+
+	//ERROR:if "targetpid" is pid of the thread that called PID_JOIN then return "EDEADLK". 
+	//MUST ADD ERROR
+	else if(targetpi->pi_ppid != curthread->t_pid){
+		return EDEADLK;
+	}
+
+
+
+
 	// Implement me.
 	KASSERT(false);
 	return EUNIMP;
