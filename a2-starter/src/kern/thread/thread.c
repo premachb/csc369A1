@@ -835,6 +835,8 @@ thread_exit(int exitcode)
 
 	cur = curthread;
 
+	pid_exit(curthread->t_pid, true);
+
 	/* VFS fields */
 	if (cur->t_cwd) {
 		VOP_DECREF(cur->t_cwd);
