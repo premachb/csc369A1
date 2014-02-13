@@ -111,7 +111,6 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 	/* Copy the strings themselves on to the stack. */
 	for(i = 1; i <= nargs; i++){
 		iterator = nargs - i;
-		kprintf("Argv at %d is %s\n", iterator, argv[iterator]);
 
 		current_offset+= strlen(argv[iterator]) + 1;
 		*(arg_start + iterator) = (vaddr_t)(stackptr - current_offset);
@@ -119,9 +118,7 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 		if(argv[iterator] != NULL){
 			code = copyoutstr(argv[iterator], (userptr_t)*(arg_start + iterator), strlen(argv[iterator]) + 1, &actual);
 		}
-		
-		kprintf("Codeoutstr is %d\n", code);
-		kprintf("Current_Offset is %d\n", current_offset);
+
 	}
 
 	// Set NULL pointer for argv[argc]
@@ -131,12 +128,10 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 	size_t accumulator = 0;
  	padding = (stackptr - current_offset) % 4;
 
- 	
  	for(i = 0; i <= nargs; i++){
  		iterator = nargs - i;
  		accumulator += sizeof(userptr_t);
 		code = copyout(&arg_start[iterator], (userptr_t)(stackptr - current_offset - padding - accumulator), sizeof(userptr_t)); 
-		kprintf("Codeout is %d\n", code);
 	}
 	
 

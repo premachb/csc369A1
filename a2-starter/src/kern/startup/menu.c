@@ -136,20 +136,11 @@ cmd_progthread(void *ptr, unsigned long nargs)
 	for (i = 0; i < nargs; i++){
 		*(argv + i) = kmalloc(strlen(args[i]) + 1);
 		strcpy(*(argv + i), args[i]);
-		kprintf("Argv at %d from menu.c is %s\n", i, argv[i]);
 	}
 
 	*(argv + nargs) = NULL;
 	
 
-	/*
-	size_t k;
-	for (k = nargs - 1; k >= 0; k++){
-		kprintf("Argv at %d from menu.c is %s\n", k, argv[k]);
-	}
-	*/
-
-	
 	KASSERT(nargs >= 1);
 
 	if (nargs > 2) {
