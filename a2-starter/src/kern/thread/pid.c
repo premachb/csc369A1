@@ -82,7 +82,6 @@ static struct lock *pidlock;		// lock for global exit data
 static struct pidinfo *pidinfo[PROCS_MAX]; // actual pid info
 static pid_t nextpid;			// next candidate pid
 static int nprocs;			// number of allocated pids
-static int exitcount = 0;   //keeps track of how many people joining
 static struct lock *exitlock;		// lock to increment exitcount
 
 
@@ -153,6 +152,7 @@ pidinfo_create(pid_t pid, pid_t ppid)
 	pi->pi_ppid = ppid;
 	pi->pi_exited = false;
 	pi->pi_exitstatus = 0xbaad;  /* Recognizably invalid value */
+	pi->joined_pid = 0;
 
 	return pi;
 }
@@ -184,6 +184,12 @@ pid_bootstrap(void)
 	if (pidlock == NULL) {
 		panic("Out of memory creating pid lock\n");
 	}
+
+	exitlock = lock_create("exitlock");
+	if (exitlock == NULL) {
+		panic("Out of memory creating exit lock\n");
+	}
+
 
 	/* not really necessary - should start zeroed */
 	for (i=0; i<PROCS_MAX; i++) {
@@ -516,6 +522,8 @@ pid_join(pid_t targetpid, int *status, int flags)
 		}
 
 		lock_acquire(pidlock);
+		targetpi->pi_exited = true;
+		targetpi->pi_pid = INVALID_PID;
 		pi_drop(targetpi->pi_pid);
 		lock_release(pidlock);
 
@@ -523,11 +531,16 @@ pid_join(pid_t targetpid, int *status, int flags)
 
 		//increase exit count
 		lock_acquire(exitlock);
-		exitcount += 1;
+		targetpi->joined_pid += 1;
 		lock_release(exitlock);
 
+
+		lock_acquire(pidlock);
 		//wait it exit
 		cv_wait(targetpi->pi_cv, pidlock);
+
+		lock_release(pidlock);
+
 
 		//grab needed imformation
 		if(!status){
@@ -540,19 +553,23 @@ pid_join(pid_t targetpid, int *status, int flags)
 
 		//decrease count
 		lock_acquire(exitlock);
-		exitcount -= 1;
+		targetpi->joined_pid -= 1;
 		lock_release(exitlock);
 
 		//if last person exiting, drop information
-		if(exitcount==0){
+		if(targetpi->joined_pid==0){
 			lock_acquire(pidlock);
+
+
+			targetpi->pi_exited = true;
+			targetpi->pi_ppid = INVALID_PID;
 			pi_drop(targetpi->pi_pid);
 		}
 
 	}
 
 
-	lock_release(pidlock);
+lock_release(pidlock);
 	*status = tempstatus;
 	return temppid;
 
