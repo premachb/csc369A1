@@ -60,14 +60,11 @@ struct pidinfo {
 	struct cv *pi_cv;		// use to wait for thread exit
 	bool detached;
 	int joined_pid;
-	struct childpid *kids;
+	pid_t kids[PROCS_MAX];
+	int kids_tail;
 };
 
 
-struct childpid {
-	pid_t pi_pid;			// process id of this thread
-	struct childpid *next;
-};
 
 
 /*
@@ -119,20 +116,11 @@ pidinfo_create(pid_t pid, pid_t ppid)
 {
 	struct pidinfo *pi;
 	struct pidinfo *ppi;
-	struct childpid *cpi;
-
 
 	if(ppid != INVALID_PID){
 		ppi = pi_get(ppid);
-		cpi->pi_pid = pid;
-
-		if(ppi->kids == NULL){
-			ppi->kids = cpi;
-		}else{
-			cpi->next = ppi->kids;
-			ppi->kids = cpi;
-	}
-
+		ppi->kids[ppi->kids_tail] = pid;
+		ppi->kids_tail++;
 	}
 
 	KASSERT(pid != INVALID_PID);
@@ -153,6 +141,8 @@ pidinfo_create(pid_t pid, pid_t ppid)
 	pi->pi_exited = false;
 	pi->pi_exitstatus = 0xbaad;  /* Recognizably invalid value */
 	pi->joined_pid = 0;
+	pi->detached = false;
+	pi->kids_tail = 0;
 
 	return pi;
 }
@@ -369,28 +359,33 @@ pid_detach(pid_t childpid)
 
 	//ERROR: if thread "childpid" could not be found return "ESRCH"
 	if (childpi == NULL){
+		lock_release(pidlock);
 		return ESRCH;
 	}
 
 	//ERROR: if thread "childpid" is already in deteached state then return "EINVAL"
 		
-	if(!childpi->detached){
+	if(childpi->detached){
+		lock_release(pidlock);
 		return EINVAL;
 	}
 
 	//ERROR: if the calling thread is not the parent of "childpid" then return "EINVAL"
 		
 	else if(childpi->pi_ppid != curthread->t_pid){
+		lock_release(pidlock);
 		return EINVAL;
 	}
 
 	//ERROR: if "childpid" has already been joined by atleast one other thread return "EINVAL"
 	else if(childpi->joined_pid == 1){
+		lock_release(pidlock);
 		return EINVAL;
 	}
 
 	//check if pid has already exited, if so then frees it.
 	if(childpi->pi_exited){
+
 		pi_drop(childpi->pi_pid);
 	}
 
@@ -418,39 +413,36 @@ void
 pid_exit(int status, bool dodetach)
 {
 	struct pidinfo *my_pi;
-	struct childpid *kid_cpi;
-	struct pidinfo *kid_pi;
-	
-	(void)dodetach; /* for compiler - delete when dodetach has real use */
 
+	
 	// Implement me. Existing code simply sets the exit status.
 	lock_acquire(pidlock);
 
 	my_pi = pi_get(curthread->t_pid);
 	KASSERT(my_pi != NULL);
 	my_pi->pi_exitstatus = status;
+	my_pi->pi_exited = true;
 
-	//disown children
-	kid_cpi = my_pi->kids;
-	while(kid_cpi != NULL){
-		kid_pi = pi_get(kid_cpi->pi_pid);
-		kid_pi->pi_ppid = INVALID_PID;
+	/* Disown kids */
+	int i;
+	struct pidinfo *current_kid;
+	for(i = 0; i < my_pi->kids_tail; i++){
+		current_kid = pi_get(my_pi->kids[i]);
 
-		if(dodetach){
-			pid_detach(kid_pi->pi_pid);
+		if(current_kid != NULL){
+			current_kid->pi_ppid = INVALID_PID;
+			if(dodetach){
+				pid_detach(current_kid->pi_pid);
+			}
 		}
-
-
-		kid_cpi = kid_cpi->next;
-
 	}
-
-
+		
 
 	//wake people up
 	cv_broadcast(my_pi->pi_cv, pidlock);
 
 	if(my_pi->detached){
+		my_pi->pi_ppid = INVALID_PID;
 		pi_drop(my_pi->pi_pid);
 	}
 
@@ -469,7 +461,7 @@ pid_join(pid_t targetpid, int *status, int flags)
 {
 
 	(void) flags;
-	(void) status;
+
 
 	struct pidinfo *targetpi;
 
@@ -482,28 +474,29 @@ pid_join(pid_t targetpid, int *status, int flags)
 
 	//ERROR: if "targetpid" is INVALID_PID or BOOTUP_PID then return "EINVAL"
 	if(targetpid == INVALID_PID || targetpid == BOOTUP_PID){
+		lock_release(pidlock);
 		return EINVAL;
 	}
 
 
-
 	targetpi = pi_get(targetpid);
 
-
-	
 	//ERROR: if "targetpid" doesnt have a pid struct then return "ESRCH"
-	if(targetpi->pi_exited){
+	if(targetpi == NULL){
+		lock_release(pidlock);
 		return ESRCH;
 	}
 
 	//ERROR: if "targetpid" has been detached then return "EINVAL"
 	else if(targetpi->detached){
+		lock_release(pidlock);
 		return EINVAL;
 	}
 
 	//ERROR:if "targetpid" is pid of the thread that called PID_JOIN then return "EDEADLK". 
 	//MUST ADD ERROR
-	else if(targetpi->pi_ppid != curthread->t_pid){
+	else if(targetpi->pi_pid == curthread->t_pid){
+		lock_release(pidlock);
 		return EDEADLK;
 	}
 
@@ -522,8 +515,7 @@ pid_join(pid_t targetpid, int *status, int flags)
 		}
 
 		lock_acquire(pidlock);
-		targetpi->pi_exited = true;
-		targetpi->pi_pid = INVALID_PID;
+		targetpi->pi_ppid = INVALID_PID;
 		pi_drop(targetpi->pi_pid);
 		lock_release(pidlock);
 
@@ -540,8 +532,6 @@ pid_join(pid_t targetpid, int *status, int flags)
 		cv_wait(targetpi->pi_cv, pidlock);
 
 		lock_release(pidlock);
-
-
 		//grab needed imformation
 		if(!status){
 			temppid = targetpi->pi_pid;
@@ -554,22 +544,20 @@ pid_join(pid_t targetpid, int *status, int flags)
 		//decrease count
 		lock_acquire(exitlock);
 		targetpi->joined_pid -= 1;
-		lock_release(exitlock);
-
+		
 		//if last person exiting, drop information
 		if(targetpi->joined_pid==0){
 			lock_acquire(pidlock);
-
-
 			targetpi->pi_exited = true;
 			targetpi->pi_ppid = INVALID_PID;
 			pi_drop(targetpi->pi_pid);
+			lock_release(pidlock);
 		}
+
+		lock_release(exitlock);
 
 	}
 
-
-lock_release(pidlock);
 	*status = tempstatus;
 	return temppid;
 
