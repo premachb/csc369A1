@@ -1,0 +1,106 @@
+DESIGN PART THREE-A2
+------------------
+
+------------------
+SYSTEM CALLS
+------------------
+
+
+WAITPID (targitpid)
+
+	#waits for a pid to exit
+
+	#MAP TO pid_join
+
+	#can only call waitpid onto one of its own children, not any pid/thread
+
+	#must support the WNOHANG error. (exits out of system call,skips waiting)
+
+
+
+SENDMESSAGE(pid_t pid, void * buf, size_t len, int flags)
+
+	#sends data to another processes
+
+	ERRORS:
+
+		ESRCH: 	No thread found corresponding to pid, or 
+				receiving thread died while you were on the queue.
+
+
+		EINVAL: Invalid flags
+
+		EFAULT: There was a fault when accessing *data
+
+		EAGAIN: Queue full, or WNOHANG specified and receiver
+				was not waiting.
+
+
+	RETURNS: on succes, # of bytes sent. otherwise negative 			 error code.
+
+
+RECIEVEMESSAGE(void * buf, size_t maxsize, pid_t *sender, int flags)
+
+	#recieves data from another process
+
+	ERRORS:
+
+		EINVAL: Invalid flags
+
+		EFAULT: There was a fault when accessing *buf or *sender
+
+		EAGAIN: WNOHANG specified and the queue is empty
+
+
+	RETURNS: on succes, # of bytes recieved (<= maxsize).
+			 otherwise negative error code.
+
+
+
+
+
+
+---------
+SOLUTIONS    
+---------
+
+
+
+
+
+
+
+
+
+
+
+----------------------
+PROBLEMS ENCOUNTERED
+----------------------
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
