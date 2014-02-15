@@ -432,6 +432,7 @@ pid_exit(int status, bool dodetach)
 		if(current_kid != NULL){
 			current_kid->pi_ppid = INVALID_PID;
 			if(dodetach){
+				lock_release(pidlock);
 				pid_detach(current_kid->pi_pid);
 			}
 		}
@@ -446,7 +447,9 @@ pid_exit(int status, bool dodetach)
 		pi_drop(my_pi->pi_pid);
 	}
 
-	lock_release(pidlock);
+	if(lock_do_i_hold(pidlock)){
+		lock_release(pidlock);
+	}	
 }
 
 /*
@@ -521,11 +524,16 @@ pid_join(pid_t targetpid, int *status, int flags)
 
 	}else{ //NOT EXITED
 
+		if(flags == WNOHANG){
+			return 0;
+		}
+
 		//increase exit count
 		lock_acquire(exitlock);
 		targetpi->joined_pid += 1;
 		lock_release(exitlock);
 
+		
 
 		lock_acquire(pidlock);
 		//wait it exit
@@ -561,4 +569,19 @@ pid_join(pid_t targetpid, int *status, int flags)
 	*status = tempstatus;
 	return temppid;
 
+}
+
+bool pid_is_child(pid_t targetpid){
+	pid_t my_pid = curthread->t_pid;
+
+	lock_acquire(pidlock);
+		struct pidinfo *tpi = pi_get(targetpid);
+	lock_release(pidlock);
+
+	if (tpi->pi_ppid == my_pid){
+		return true;
+	}
+	else{
+		return false;
+	}
 }

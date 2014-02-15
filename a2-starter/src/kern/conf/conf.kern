@@ -371,6 +371,8 @@ file      syscall/time_syscalls.c
 # New file with setup for process-related syscalls
 file	  syscall/proc_syscalls.c
 file	  syscall/file_syscalls.c
+file      syscall/waitpid.c
+file      syscall/message.c
 
 #
 # Startup and initialization

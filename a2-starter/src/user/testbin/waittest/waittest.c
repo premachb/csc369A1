@@ -37,7 +37,7 @@ int
 main()
 {
 	int pid;
-        int result, status;
+    int result, status;
 
 	warnx("Starting.");
 
@@ -60,7 +60,6 @@ main()
 	} else {
 		warnx("waitpid returned status %d (raw %d).", WEXITSTATUS(status), status);
 	}
-
 
 	/* Wait for child, WNOHANG */
 	warnx("Creating long-running child.  Parent should not have to wait (WNOHANG).");

@@ -118,7 +118,6 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 		if(argv[iterator] != NULL){
 			code = copyoutstr(argv[iterator], (userptr_t)*(arg_start + iterator), strlen(argv[iterator]) + 1, &actual);
 		}
-
 	}
 
 	// Set NULL pointer for argv[argc]
@@ -134,7 +133,6 @@ runprogram(char *progname, char **argv, unsigned long nargs)
 		code = copyout(&arg_start[iterator], (userptr_t)(stackptr - current_offset - padding - accumulator), sizeof(userptr_t)); 
 	}
 	
-
 	/* Warp to user mode. */
 	enter_new_process(nargs, (userptr_t)(stackptr - current_offset - padding - accumulator), 
 			  (stackptr - current_offset - padding), entrypoint);

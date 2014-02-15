@@ -837,6 +837,9 @@ thread_exit(int exitcode)
 	if(cur->t_addrspace == NULL){
 		pid_exit(exitcode, false);
 	}
+	else{
+		pid_exit(exitcode, true);
+	}
 
 
 	/* VFS fields */

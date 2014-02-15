@@ -82,6 +82,7 @@ syscall(struct trapframe *tf)
 	int32_t retval;
 	int err;
 
+
 	KASSERT(curthread != NULL);
 	KASSERT(curthread->t_curspl == 0);
 	KASSERT(curthread->t_iplhigh_count == 0);
@@ -141,7 +142,11 @@ syscall(struct trapframe *tf)
 		    break;
 
 /* ASST2 - You need to fill in the code for each of these cases */
-            case SYS_waitpid:
+        	case SYS_waitpid:
+        	retval = waitpid(tf->tf_a0, (userptr_t)tf->tf_a1, tf->tf_a2);
+			err = 0;        	
+        	break;
+
 
 	    case SYS_sendmessage:
 

@@ -40,6 +40,7 @@
 #include <vfs.h>
 #include <syscall.h>
 #include <test.h>
+#include <pid.h>
 
 /*
  * In-kernel menu and command dispatcher.
@@ -186,7 +187,10 @@ int
 common_prog(int nargs, char **args)
 {
 	int result;
+	int status;
 	char **args_copy;
+	pid_t kid;
+
 #if OPT_SYNCHPROBS
 	kprintf("Warning: this probably won't work with a "
 		"synchronization-problems kernel.\n");
@@ -205,7 +209,14 @@ common_prog(int nargs, char **args)
 	result = thread_fork(args_copy[0] /* thread name */,
 			cmd_progthread /* thread function */,
 			args_copy /* thread arg */, nargs /* thread arg */,
-			NULL);
+			&kid);
+
+
+	if(args_copy[nargs - 1] == "&"){
+		pid_detach(kid);
+	}
+
+	pid_join(kid, &status, 0);
 	if (result) {
 		kprintf("thread_fork failed: %s\n", strerror(result));
 		/* demke: need to free copy of args if fork fails */

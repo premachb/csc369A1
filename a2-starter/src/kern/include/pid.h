@@ -70,5 +70,11 @@ void pid_exit(int status, bool dodetach);
  */
 int pid_join(pid_t targetpid, int *status, int flags);
 
+/*
+   Return true if the targetpid is the current threads child
+ */
+
+bool pid_is_child(pid_t targetpid);
+
 
 #endif /* _PID_H_ */
